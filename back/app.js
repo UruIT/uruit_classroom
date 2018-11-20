@@ -1,40 +1,43 @@
-var createError = require('http-errors')
-var express = require('express')
-var path = require('path')
-var cookieParser = require('cookie-parser')
-var logger = require('morgan')
-var questionsRouter = require('./src/api/questions')
-
+import http from 'http'
+import express from 'express'
 import cors from 'cors'
+import morgan from 'morgan'
+import bodyParser from 'body-parser'
+import initializeDb from './db/connection'
+import middleware from './middleware'
+import api from './src/api'
+import config from './config.json'
 
-var app = express()
+let app = express()
+app.server = http.createServer(app)
 
-// view engine setup
-app.set('views', path.join(__dirname, 'views'))
-app.set('view engine', 'pug')
+// logger
+app.use(morgan('dev'))
 
-app.use(logger('dev'))
-app.use(express.json())
-app.use(express.urlencoded({ extended: false }))
-app.use(cookieParser())
-app.use(express.static(path.join(__dirname, 'public')))
+// 3rd party middleware
+app.use(
+  cors({
+    exposedHeaders: config.corsHeaders
+  })
+)
 
-app.use('/', questionsRouter)
+app.use(
+  bodyParser.json({
+    limit: config.bodyLimit
+  })
+)
 
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404))
+// connect to db
+initializeDb(db => {
+  // internal middleware
+  app.use(middleware({ config, db }))
+
+  // api router
+  app.use('/api', api({ config, db }))
+
+  app.server.listen(process.env.PORT || config.port, () => {
+    console.log(`Started on port ${app.server.address().port}`)
+  })
 })
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message
-  res.locals.error = req.app.get('env') === 'development' ? err : {}
-
-  // render the error page
-  res.status(err.status || 500)
-  res.render('error')
-})
-
-module.exports = app
+export default app
